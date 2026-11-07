@@ -1,36 +1,21 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 排雷選股
 
-## Getting Started
+總裁個人用的台股研究網頁。先看關卡與 CAN SLIM 門檻，再依你選的一種方法排預備名單。不會自動下單。
 
-First, run the development server:
+## 怎麼跑
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+瀏覽器打開 [http://127.0.0.1:43123](http://127.0.0.1:43123)。手機或桌面可以用「加入主畫面」。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run test:engine
+npm run test:e2e
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+資料在瀏覽器裡（IndexedDB 與 localStorage）。設定頁可以匯出、匯入備份。
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+神奇公式需要資本報酬率與盈餘殖利率。這份種子沒有這兩項已驗證數字，所以不編名次。CAN SLIM 的 L 要同業營收或市占前三，也還沒有附來源的排名，因此標未驗證。
