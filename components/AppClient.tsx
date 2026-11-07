@@ -136,7 +136,7 @@ export default function AppClient() {
     };
     sync();
     window.addEventListener("hashchange", sync);
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => undefined);
     return () => window.removeEventListener("hashchange", sync);
   }, []);
 

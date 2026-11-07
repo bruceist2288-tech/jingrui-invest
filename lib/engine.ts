@@ -272,7 +272,7 @@ export function scaleWeights(weights: Weights): Weights {
   if (sum <= 0) return { ...DEFAULT_WEIGHTS };
   const exact = raw.map((value) => (value / sum) * 100);
   const floored = exact.map((value) => Math.floor(value));
-  let left = 100 - floored.reduce((a, b) => a + b, 0);
+  const left = 100 - floored.reduce((a, b) => a + b, 0);
   const order = exact
     .map((value, index) => ({ index, frac: value - Math.floor(value) }))
     .sort((a, b) => b.frac - a.frac || a.index - b.index);
