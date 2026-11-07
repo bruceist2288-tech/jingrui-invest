@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import rawBundle from "@/data/bundle.json";
 import { toInput } from "@/lib/canslim";
-import { GRAHAM_NOTE, GRAHAM_TRADEOFF, summarizeRules } from "@/lib/masters";
+import valuationFile from "@/data/valuation.json";
+import { BUFFETT_NOTE, BUFFETT_TRADEOFF, DEFAULT_BUFFETT_WEIGHTS, GRAHAM_NOTE, GRAHAM_TRADEOFF, buffettLine, computeBuffett, computeGraham, grahamLine, type BuffettResult, type GrahamResult } from "@/lib/masters";
 import {
   CANSLIM_LABEL,
   CANSLIM_NORM_NOTE,
@@ -16,8 +17,12 @@ import {
   DEFAULT_SETTINGS,
   DEFAULT_WEIGHTS,
   ORIGIN_NOTES,
+  canslimDataGap,
+  canslimOnFromCoverage,
   canslimStatLines,
+  defaultCanslimOn,
   formatTotal,
+  scoreCanslim,
   gapIsCore,
   lightLabel,
   listHeader,
@@ -39,18 +44,44 @@ import {
   type DisplayLevel,
   type GateId,
   type ScoredStock,
+  type MagicStatus,
   type Settings,
   type SubId,
 } from "@/lib/engine";
 import { copyText, exportReport, lineHref } from "@/lib/report";
 import { downloadJson, loadPersisted, savePersisted } from "@/lib/storage";
 import type { Bundle, BundleStock, Holding, NewsItem, RuleLog, UserDate } from "@/lib/types";
+import { flattenFormulas, formulaGuide, stockCalculations } from "@/lib/formulas";
 import { GLOSSARY, entryChecks, experts, fmt, reportLines, shareText, technicalLights, topReasons } from "@/lib/present";
 
 const bundle = rawBundle as unknown as Bundle;
 const stocks = bundle.stocks;
 const inputs = stocks.map(toInput);
 const byId = new Map(stocks.map((stock) => [stock.id, stock]));
+const valuation = valuationFile as { rows: Record<string, { pe: number | null; pb: number | null; date: string; source: string }> };
+
+function rocDate(date: string): string {
+  if (!date || date.length < 7) return date;
+  const year = Number(date.slice(0, date.length - 4)) + 1911;
+  return `${year}-${date.slice(-4, -2)}-${date.slice(-2)}`;
+}
+
+function grahamFor(stock: BundleStock): GrahamResult {
+  const row = valuation.rows[stock.id];
+  return computeGraham({
+    price: stock.close,
+    pe: row?.pe ?? null,
+    pb: row?.pb ?? null,
+    priceDate: stock.priceDate,
+    priceSource: stock.priceSource,
+    valuationDate: row?.date ? rocDate(row.date) : null,
+    valuationSource: row?.source ?? null,
+  });
+}
+
+const grahamMap = new Map(stocks.map((stock) => [stock.id, grahamFor(stock)]));
+const coverage = summarizeCanslim(inputs.map((stock) => scoreCanslim(stock, normalizeSettings({ ...DEFAULT_SETTINGS, canslimOn: defaultCanslimOn(), canslimGate: false }))));
+const INITIAL_SETTINGS = normalizeSettings({ ...DEFAULT_SETTINGS, canslimGate: false, canslimOn: canslimOnFromCoverage(coverage) });
 
 const TABS = [
   ["home", "首頁"],
@@ -73,7 +104,7 @@ const GATES: { id: GateId; label: string; subs: { id: SubId; label: string }[] }
 
 export default function AppClient() {
   const [ready, setReady] = useState(false);
-  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<Settings>(INITIAL_SETTINGS);
   const [tab, setTab] = useState<Tab>("home");
   const [openId, setOpenId] = useState<string | null>(null);
   const [holdings, setHoldings] = useState<Holding[]>([]);
@@ -86,7 +117,7 @@ export default function AppClient() {
 
   useEffect(() => {
     loadPersisted().then((saved) => {
-      if (saved?.settings) setSettings(normalizeSettings({ ...DEFAULT_SETTINGS, ...(saved.settings as Settings) }));
+      if (saved?.settings) setSettings(normalizeSettings({ ...INITIAL_SETTINGS, ...(saved.settings as Settings) }));
       if (Array.isArray(saved?.holdings)) setHoldings(saved.holdings as Holding[]);
       if (Array.isArray(saved?.favorites)) setFavorites(saved.favorites as string[]);
       if (Array.isArray(saved?.news)) setNews(saved.news as NewsItem[]);
@@ -123,6 +154,50 @@ export default function AppClient() {
   const ranked = useMemo(() => rankUniverse(inputs, settings), [settings]);
   const all = useMemo(() => [...ranked.core, ...ranked.reserve, ...ranked.fail, ...ranked.veto], [ranked]);
   const miss = useMemo(() => summarizeCanslim(all.map((row) => row.canslim)), [all]);
+  const grahamList = useMemo(
+    () =>
+      ranked.pool
+        .map((row) => ({ row, value: grahamMap.get(row.stock.id)! }))
+        .filter((item) => item.value.state === "ranked" && item.value.margin != null)
+        .sort((a, b) => (b.value.margin as number) - (a.value.margin as number) || a.row.stock.id.localeCompare(b.row.stock.id))
+        .slice(0, 30),
+    [ranked],
+  );
+  const grahamPlace = useMemo(() => new Map(grahamList.map((item, index) => [item.row.stock.id, index + 1])), [grahamList]);
+  const buffettList = useMemo(() => {
+    const assumptions = {
+      weights: settings.buffettWeights,
+      roeMin: settings.buffettRoeMin,
+      debtCap: settings.buffettDebtCap,
+      growth: settings.buffettGrowth,
+      discount: settings.buffettDiscount,
+    };
+    return ranked.pool
+      .map((row) => {
+        const stock = byId.get(row.stock.id)!;
+        const value = computeBuffett({
+          roe: stock.roe,
+          debt: stock.debt,
+          fcfQuarters: stock.fcfQuarters,
+          fcfTtm: stock.fcfTtm,
+          gmTrend: stock.gmTrend,
+          mcapBillion: stock.mcapBillion,
+          reportQuarter: stock.reportQuarter,
+          priceDate: stock.priceDate,
+          statementSource: stock.statementSource,
+          fcfSource: stock.fcfSource,
+        }, assumptions);
+        return { row, value };
+      })
+      .filter((item) => item.value.score != null)
+      .sort((a, b) => (b.value.score as number) - (a.value.score as number) || a.row.stock.id.localeCompare(b.row.stock.id))
+      .slice(0, 30);
+  }, [ranked, settings]);
+  const displayPool = settings.rankingMethod === "graham"
+    ? grahamList.map((item) => item.row)
+    : settings.rankingMethod === "buffett"
+      ? buffettList.map((item) => item.row)
+      : ranked.pool.slice(0, 30);
   const magic = useMemo(
     () =>
       rankMagic(
@@ -170,7 +245,7 @@ export default function AppClient() {
       <main className="main">
         <header className="topbar">
           <div>
-            <h1 className="brand">排雷選股<small>總裁個人版 · 不自動下單</small></h1>
+            <h1 className="brand">璟睿投資理財<small>先排雷，再選股 · 不自動下單</small></h1>
           </div>
           <div className="levels" data-testid="display-level">
             {(["novice", "advanced", "pro"] as DisplayLevel[]).map((level) => (
@@ -187,9 +262,9 @@ export default function AppClient() {
           const hit = stocks.find((stock) => stock.id === query || stock.name.includes(query));
           if (hit) open(hit.id);
         }} /></label>
-        {tab === "home" && <Home ranked={ranked} miss={miss} settings={settings} open={open} go={go} setDomain={setDomain} />}
-        {tab === "rank" && <Rank rows={ranked} all={all} miss={miss} magic={magic} settings={settings} open={open} onMethod={(method) => commit({ ...settings, rankingMethod: method }, `排名改為 ${method}`)} />}
-        {tab === "industry" && <Industry all={ranked.pool} domain={domain} setDomain={setDomain} settings={settings} open={open} />}
+        {tab === "home" && <Home ranked={ranked} pool={displayPool} miss={miss} settings={settings} open={open} go={go} setDomain={setDomain} />}
+        {tab === "rank" && <Rank rows={ranked} pool={displayPool} all={all} miss={miss} magic={magic} grahamList={grahamList} grahamPlace={grahamPlace} buffettList={buffettList} settings={settings} open={open} onMethod={(method) => commit({ ...settings, rankingMethod: method }, `排名改為 ${method}`)} />}
+        {tab === "industry" && <Industry all={displayPool} domain={domain} setDomain={setDomain} settings={settings} open={open} />}
         {tab === "explore" && <Explore all={all} news={news} setNews={setNews} open={open} />}
         {tab === "risk" && <Risk all={all} open={open} />}
         {tab === "me" && (
@@ -221,7 +296,9 @@ export default function AppClient() {
           row={opened}
           stock={openedStock}
           settings={settings}
-          magicText={magicLine(magic.byId.get(opened.stock.id))}
+          magicStatus={magic.byId.get(opened.stock.id)}
+          graham={grahamMap.get(opened.stock.id)!}
+          grahamRank={grahamPlace.get(opened.stock.id) ?? null}
           favorite={favorites.includes(opened.stock.id)}
           onClose={() => go(tab)}
           onFav={() => setFavorites((prev) => (prev.includes(opened.stock.id) ? prev.filter((id) => id !== opened.stock.id) : [...prev, opened.stock.id]))}
@@ -268,7 +345,6 @@ function Card({ row, settings, open }: { row: ScoredStock & { bothLists?: boolea
         {" "}CAN SLIM 門檻 <b data-testid="canslim-score">{row.canslim.qualified ? "通過" : "沒過"}</b>
         {row.bothLists && <b data-testid="both-badge"> 兩種預備名單都有</b>}</p>
       <p><Missing row={row} /></p>
-      {settings.grahamGate && !row.graham.qualified && <p data-testid="graham-miss">葛拉漢缺：{row.graham.missing.map((item) => `${item.label}${item.status === "unverified" ? "（未驗證）" : ""}`).join("、")}</p>}
       {settings.display !== "novice" && (
         <div data-testid="card-reasons">
           {topReasons(stock).map((reason) => <p key={reason} className="muted">{reason}</p>)}
@@ -303,17 +379,17 @@ function MissBlock({ miss }: { miss: CanslimMissStat }) {
   );
 }
 
-function Home({ ranked, miss, settings, open, go, setDomain }: { ranked: ReturnType<typeof rankUniverse>; miss: CanslimMissStat; settings: Settings; open: (id: string) => void; go: (tab: Tab) => void; setDomain: (value: string) => void }) {
+function Home({ ranked, pool, miss, settings, open, go, setDomain }: { ranked: ReturnType<typeof rankUniverse>; pool: ScoredStock[]; miss: CanslimMissStat; settings: Settings; open: (id: string) => void; go: (tab: Tab) => void; setDomain: (value: string) => void }) {
   const domains = [...new Set(stocks.map((stock) => stock.domain))];
   return (
     <div>
-      <Priority pool={ranked.pool.slice(0, 30)} settings={settings} open={open} />
+      <Priority pool={pool} settings={settings} open={open} />
       <section className="panel" data-testid="home-picks">
         <h2>預備名單</h2>
         <p className="muted">{POOL_NOTE}</p>
-        <p data-testid="pool-home-count">{ranked.pool.slice(0, 30).length}</p>
-        {ranked.pool.length === 0 && <p>留現金。目前沒有公司同時通過啟用的關卡和 CAN SLIM 門檻，不多補。</p>}
-        {ranked.pool.slice(0, 30).map((row) => <Card key={row.stock.id} row={row} settings={settings} open={open} />)}
+        <p data-testid="pool-home-count">{pool.length}</p>
+        {pool.length === 0 && <p>留現金。目前沒有公司通過啟用的門檻，不多補。</p>}
+        {pool.map((row) => <Card key={row.stock.id} row={row} settings={settings} open={open} />)}
         <button type="button" className="btn solid" onClick={() => go("rank")}>前往總排行</button>
       </section>
       <section className="panel" data-testid="home-risk">
@@ -357,10 +433,10 @@ function Priority({ pool, settings, open }: { pool: ScoredStock[]; settings: Set
   );
 }
 
-function Rank({ rows, all, miss, magic, settings, open, onMethod }: { rows: ReturnType<typeof rankUniverse>; all: ScoredStock[]; miss: CanslimMissStat; magic: ReturnType<typeof rankMagic>; settings: Settings; open: (id: string) => void; onMethod: (method: "system" | "magic") => void }) {
+function Rank({ rows, pool, all, miss, magic, grahamList, grahamPlace, buffettList, settings, open, onMethod }: { rows: ReturnType<typeof rankUniverse>; pool: ScoredStock[]; all: ScoredStock[]; miss: CanslimMissStat; magic: ReturnType<typeof rankMagic>; grahamList: { row: ScoredStock; value: GrahamResult }[]; grahamPlace: Map<string, number>; buffettList: { row: ScoredStock; value: BuffettResult }[]; settings: Settings; open: (id: string) => void; onMethod: (method: "system" | "magic" | "graham" | "buffett") => void }) {
   const [sort, setSort] = useState("sum");
   const view = settings.rankingMethod;
-  const shown = rows.pool.slice(0, 30);
+  const shown = pool;
   const ordered = [...all].sort((a, b) => compare(a, b, sort));
   const text = `${rows.header}\n${tickedCanslimLabel(settings)}\n${MAGIC_SEPARATE_NOTE}\n${canslimStatLines(miss).join("\n")}\n${ordered.slice(0, 10).map((row) => `${row.stock.id} ${byId.get(row.stock.id)?.name} CAN SLIM ${round1(row.canslim.score)} ${missingPhrase(row.canslim)} ${magicLine(magic.byId.get(row.stock.id))}`).join("\n")}`;
   return (
@@ -368,12 +444,14 @@ function Rank({ rows, all, miss, magic, settings, open, onMethod }: { rows: Retu
       <div className="row">
         <button type="button" className={view === "system" ? "chip on" : "chip"} data-testid="rank-mode-score" onClick={() => onMethod("system")}>本系統分數</button>
         <button type="button" className={view === "magic" ? "chip on" : "chip"} data-testid="rank-mode-magic" onClick={() => onMethod("magic")}>神奇公式名次</button>
+        <button type="button" className={view === "graham" ? "chip on" : "chip"} data-testid="rank-mode-graham" onClick={() => onMethod("graham")}>葛拉漢安全邊際</button>
+        <button type="button" className={view === "buffett" ? "chip on" : "chip"} data-testid="rank-mode-buffett" onClick={() => onMethod("buffett")}>巴菲特分數</button>
       </div>
       <p className="muted">名單內 {rows.core.length} · 候補 {rows.reserve.length} · 未過關 {rows.fail.length} · 剔除 {rows.veto.length}</p>
       <label>排序<select value={sort} onChange={(event) => setSort(event.target.value)}><option value="sum">總分</option><option value="stars">星等</option><option value="light">燈號</option><option value="yoy">營收成長</option><option value="complete">資料完整度</option></select></label>
       <div className="row">
         <a className="btn" data-testid="rank-share-line" href={lineHref(text)}>用 Line 分享名單</a>
-        <button type="button" className="btn" data-testid="rank-export-pdf" onClick={() => exportReport("排雷名單", "排雷選股名單", text.split("\n"), "pdf")}>匯出 PDF</button>
+        <button type="button" className="btn" data-testid="rank-export-pdf" onClick={() => exportReport("璟睿名單", "璟睿投資理財名單", text.split("\n"), "pdf")}>匯出 PDF</button>
       </div>
       <MissBlock miss={miss} />
       {view === "magic" && (
@@ -386,6 +464,31 @@ function Rank({ rows, all, miss, magic, settings, open, onMethod }: { rows: Retu
           {magic.top.map((item) => item.state === "ranked" && (
             <p key={item.id}><button type="button" onClick={() => open(item.id)}>{item.id} {byId.get(item.id)?.name}</button> {magicLine(item)}</p>
           ))}
+        </section>
+      )}
+      {view === "graham" && (
+        <section data-testid="graham-list">
+          <h2>葛拉漢預備名單</h2>
+          <p data-testid="graham-note">{GRAHAM_NOTE}</p>
+          <p data-testid="graham-tradeoff">{GRAHAM_TRADEOFF}</p>
+          <p className="muted">{POOL_NOTE} 依安全邊際由高到低。負的每股盈餘或每股淨值、或沒有本益比／股價淨值，列未驗證、不適用，不補進名單。</p>
+          {grahamList.length === 0 && <p data-testid="graham-empty">通過目前門檻、而且葛拉漢數算得出來的公司是 0 家。留現金，不另找沒過關的來排。</p>}
+          {grahamList.map((item) => (
+            <p key={item.row.stock.id}>
+              <button type="button" onClick={() => open(item.row.stock.id)}>{item.row.stock.id} {byId.get(item.row.stock.id)?.name}</button>
+              {" "}第 {grahamPlace.get(item.row.stock.id)} 名，安全邊際 {((item.value.margin || 0) * 100).toFixed(1)}%
+            </p>
+          ))}
+        </section>
+      )}
+      {view === "buffett" && (
+        <section data-testid="buffett-list">
+          <h2>巴菲特預備名單</h2>
+          <p data-testid="buffett-note">{BUFFETT_NOTE}</p>
+          <p data-testid="buffett-tradeoff">{BUFFETT_TRADEOFF}</p>
+          <p className="muted">{POOL_NOTE} 只按已驗證項目計分。沒有可計分項目的公司不補進名單。</p>
+          {buffettList.length === 0 && <p>通過目前門檻、而且巴菲特分數算得出來的公司是 0 家。留現金。</p>}
+          {buffettList.map((item, index) => <p key={item.row.stock.id}><button type="button" onClick={() => open(item.row.stock.id)}>{index + 1}. {item.row.stock.id} {byId.get(item.row.stock.id)?.name}</button> {item.value.score?.toFixed(1)} 分，完整度 {item.value.completeness.toFixed(0)}%</p>)}
         </section>
       )}
       {view === "system" && <h2>預備名單</h2>}
@@ -550,11 +653,7 @@ function Me(props: {
 
   function toggleCanslim(key: CanslimKey) {
     const next = { ...settings.canslimOn, [key]: !settings.canslimOn[key] };
-    if (!CANSLIM_ORDER.some((item) => next[item])) {
-      toast("至少留一項 CAN SLIM 條件");
-      return;
-    }
-    commit({ ...settings, canslimOn: next }, `CAN SLIM 條件 ${key}`);
+      commit({ ...settings, canslimOn: next }, `CAN SLIM 條件 ${key}`);
   }
 
   return (
@@ -609,8 +708,40 @@ function Me(props: {
       <section className="panel" data-testid="standards-panel">
         <h2>排名方法</h2>
         <p>{RANKING_NOTE}</p>
+        <div data-testid="formula-guide" className="formula">
+          <h2>公式與計算方式</h2>
+          {formulaGuide(settings).map((block) => (
+            <div key={block.id}>
+              <h3>{block.title}</h3>
+              {block.lines.map((line) => <p key={line}>{line}</p>)}
+            </div>
+          ))}
+        </div>
         <label><input data-testid="rank-radio-system" type="radio" name="rank-method" checked={settings.rankingMethod === "system"} onChange={() => commit({ ...settings, rankingMethod: "system" }, "排名改為本系統")} /> 本系統 100 分表</label>
         <label><input data-testid="rank-radio-magic" type="radio" name="rank-method" checked={settings.rankingMethod === "magic"} onChange={() => commit({ ...settings, rankingMethod: "magic" }, "排名改為神奇公式")} /> 神奇公式名次</label>
+        <label><input data-testid="rank-radio-graham" type="radio" name="rank-method" checked={settings.rankingMethod === "graham"} onChange={() => commit({ ...settings, rankingMethod: "graham" }, "排名改為葛拉漢")} /> 葛拉漢安全邊際</label>
+        <label><input data-testid="rank-radio-buffett" type="radio" name="rank-method" checked={settings.rankingMethod === "buffett"} onChange={() => commit({ ...settings, rankingMethod: "buffett" }, "排名改為巴菲特")} /> 巴菲特分數</label>
+        <p data-testid="buffett-note">{BUFFETT_NOTE}</p>
+        <p data-testid="buffett-tradeoff">{BUFFETT_TRADEOFF}</p>
+        <h3>巴菲特權重</h3>
+        {(["roe", "debt", "fcf", "margin", "dcf"] as const).map((key) => (
+          <div className="weight" key={key}>
+            <span>{{ roe: "ROE", debt: "負債", fcf: "現金流", margin: "毛利", dcf: "折現" }[key]}</span>
+            <input type="range" min={0} max={100} value={settings.buffettWeights[key]} onChange={(event) => commit({ ...settings, buffettWeights: { ...settings.buffettWeights, [key]: Number(event.target.value) } }, "巴菲特權重")} />
+            <input data-testid={`buffett-weight-${key}`} type="number" min={0} max={100} value={settings.buffettWeights[key]} onChange={(event) => {
+              if (event.target.value === "") return;
+              const next = Number(event.target.value);
+              if (Number.isFinite(next)) commit({ ...settings, buffettWeights: { ...settings.buffettWeights, [key]: next } }, "巴菲特權重");
+            }} />
+          </div>
+        ))}
+        <p data-testid="buffett-weight-total">合計 {formatTotal(settings.buffettWeights.roe + settings.buffettWeights.debt + settings.buffettWeights.fcf + settings.buffettWeights.margin + settings.buffettWeights.dcf)}</p>
+        {Math.abs(settings.buffettWeights.roe + settings.buffettWeights.debt + settings.buffettWeights.fcf + settings.buffettWeights.margin + settings.buffettWeights.dcf - 100) >= 0.05 && <p data-testid="buffett-weight-warning" className="warn">合計必須是 100。現在不是 100，分數會先調成 100，再把未驗證項目排除。</p>}
+        <label className="muted">折現成長率 %<input data-testid="buffett-growth" type="number" value={Number((settings.buffettGrowth * 100).toFixed(2))} onChange={(event) => { const next = Number(event.target.value); if (Number.isFinite(next)) commit({ ...settings, buffettGrowth: next / 100 }, "巴菲特成長率"); }} /></label>
+        <label className="muted">折現率 %<input data-testid="buffett-discount" type="number" value={Number((settings.buffettDiscount * 100).toFixed(2))} onChange={(event) => { const next = Number(event.target.value); if (Number.isFinite(next)) commit({ ...settings, buffettDiscount: next / 100 }, "巴菲特折現率"); }} /></label>
+        <button type="button" data-testid="buffett-weight-reset" className="btn" onMouseDown={(event) => { event.preventDefault(); commit({ ...settings, buffettWeights: { ...DEFAULT_BUFFETT_WEIGHTS }, buffettGrowth: 0.03, buffettDiscount: 0.1 }, "恢復巴菲特預設"); }}>恢復預設</button>
+        <p data-testid="graham-note">{GRAHAM_NOTE}</p>
+        <p data-testid="graham-tradeoff">{GRAHAM_TRADEOFF}</p>
         <h2>本系統權重</h2>
         <p data-testid="origin-system">{ORIGIN_NOTES.system}</p>
         <h3>神奇公式是另一張名次名單</h3>
@@ -629,7 +760,9 @@ function Me(props: {
                 <input data-testid={`canslim-on-${key}`} type="checkbox" checked={settings.canslimOn[key]} onChange={() => toggleCanslim(key)} /> {key} {CANSLIM_LABEL[key]}
               </label>
               <span data-testid={`canslim-fail-${key}`}> 沒過 {stat.missed}（未驗證 {stat.unverified}、查了但沒過 {stat.failed}）</span>
-              {gapIsCore(key) && !settings.canslimOn[key] && <p className="warn" data-testid={`canslim-core-warn-${key}`}>這是核心項。你已取消勾選，達標時不再要求它。</p>}
+              <span data-testid={`miss-${key}-coverage`}> 涵蓋 {stat.passed + stat.failed}/{miss.universe}</span>
+              {canslimDataGap(stat.unverified, miss.universe) && !settings.canslimOn[key] && <p data-testid={`canslim-gap-${key}`}>資料尚未取得，暫不套用</p>}
+              {gapIsCore(key) && !settings.canslimOn[key] && !canslimDataGap(stat.unverified, miss.universe) && <p className="warn" data-testid={`canslim-core-warn-${key}`}>這是核心項。你已取消勾選，達標時不再要求它。</p>}
             </div>
           );
         })}
@@ -660,24 +793,6 @@ function Me(props: {
           恢復預設
         </button>
         <p className="muted">CAN SLIM 不計分。勾選條件全過才進預備名單。目前全過 {props.all.filter((row) => row.canslim.qualified).length} 家。</p>
-        <MasterSet
-          title="葛拉漢門檻"
-          gateId="graham-gate"
-          enabled={settings.grahamGate}
-          onToggle={() => commit({ ...settings, grahamGate: !settings.grahamGate }, "葛拉漢門檻")}
-          principle={GRAHAM_NOTE}
-          tradeoff={GRAHAM_TRADEOFF}
-          rows={summarizeRules(props.all.map((row) => row.graham))}
-          flags={settings.grahamOn}
-          onFlag={(key) => commit({ ...settings, grahamOn: { ...settings.grahamOn, [key]: !settings.grahamOn[key as keyof typeof settings.grahamOn] } }, `葛拉漢 ${key}`)}
-          prefix="graham"
-          caps={[
-            { id: "graham-pe-max", label: "本益比上限", value: settings.grahamPeMax, set: (value) => commit({ ...settings, grahamPeMax: value }, "葛拉漢本益比") },
-            { id: "graham-pb-max", label: "股價淨值上限", value: settings.grahamPbMax, set: (value) => commit({ ...settings, grahamPbMax: value }, "葛拉漢淨值") },
-            { id: "graham-product-max", label: "本益比×淨值上限", value: settings.grahamProductMax, set: (value) => commit({ ...settings, grahamProductMax: value }, "葛拉漢乘積") },
-            { id: "graham-current-min", label: "流動比率下限", value: settings.grahamCurrentMin, set: (value) => commit({ ...settings, grahamCurrentMin: value }, "葛拉漢流動比率") },
-          ]}
-        />
       </section>
       <section className="panel" data-testid="gates-panel">
         <h2>關卡設定</h2>
@@ -694,7 +809,7 @@ function Me(props: {
             ))}
           </div>
         ))}
-        <button type="button" className="btn" onClick={() => commit(DEFAULT_SETTINGS, "恢復全部預設")}>恢復預設規則</button>
+        <button type="button" className="btn" onClick={() => commit(INITIAL_SETTINGS, "恢復全部預設")}>恢復預設規則</button>
       </section>
       <section className="panel" data-testid="notify-stub">
         <h2>Line 推播</h2>
@@ -724,8 +839,39 @@ function Me(props: {
   );
 }
 
-function Detail({ row, stock, settings, magicText, favorite, onClose, onFav, toast }: { row: ScoredStock; stock: BundleStock; settings: Settings; magicText: string; favorite: boolean; onClose: () => void; onFav: () => void; toast: (text: string) => void }) {
-  const text = `${shareText(row, stock, settings, magicText)}\n${missingPhrase(row.canslim)}`;
+function buffettFacts(stock: BundleStock) {
+  return {
+    roe: stock.roe,
+    debt: stock.debt,
+    fcfQuarters: stock.fcfQuarters,
+    fcfTtm: stock.fcfTtm,
+    gmTrend: stock.gmTrend,
+    mcapBillion: stock.mcapBillion,
+    reportQuarter: stock.reportQuarter,
+    priceDate: stock.priceDate,
+    statementSource: stock.statementSource,
+    fcfSource: stock.fcfSource,
+  };
+}
+
+function Detail({ row, stock, settings, magicStatus, graham, grahamRank, favorite, onClose, onFav, toast }: { row: ScoredStock; stock: BundleStock; settings: Settings; magicStatus: MagicStatus | undefined; graham: GrahamResult; grahamRank: number | null; favorite: boolean; onClose: () => void; onFav: () => void; toast: (text: string) => void }) {
+  const magicText = magicLine(magicStatus);
+  const grahamText = grahamLine(graham, grahamRank);
+  const buffett = computeBuffett(buffettFacts(stock), {
+    weights: settings.buffettWeights,
+    roeMin: settings.buffettRoeMin,
+    debtCap: settings.buffettDebtCap,
+    growth: settings.buffettGrowth,
+    discount: settings.buffettDiscount,
+  });
+  const buffettText = [
+    buffettLine(buffett),
+    ...buffett.items.map((item) => `${item.label}：${item.status === "verified" ? `${item.score?.toFixed(1)} 分（權重 ${item.weight.toFixed(1)}）` : "未驗證，這項排除"}。${item.detail}${item.source ? ` 來源 ${item.source} ${item.date || ""}` : ""}`),
+    `完整度 ${buffett.completeness.toFixed(0)}%。假設成長 ${(settings.buffettGrowth * 100).toFixed(1)}%、折現 ${(settings.buffettDiscount * 100).toFixed(1)}%。`,
+  ].join("\n");
+  const formulas = stockCalculations(stock, row, settings, graham, buffett, magicStatus);
+  const formulaLines = flattenFormulas(formulas);
+  const text = `${shareText(row, stock, settings, magicText, grahamText, buffettText)}\n${formulaLines.join("\n")}\n${missingPhrase(row.canslim)}`;
   return (
     <div className="overlay" data-testid="detail">
       <button type="button" className="btn" onClick={onClose}>返回</button>
@@ -746,8 +892,19 @@ function Detail({ row, stock, settings, magicText, favorite, onClose, onFav, toa
       <p className="muted">{CANSLIM_NORM_NOTE}</p>
       {row.canslim.rows.map((item) => <p key={item.key} className={gapIsCore(item.key) && !item.pass && settings.canslimOn[item.key] ? "missing-core" : "muted"}>{item.key} {item.label}：{settings.canslimOn[item.key] ? (item.pass ? "過" : item.status === "unverified" ? "未驗證" : "沒過") : "不看"}。{item.detail}</p>)}
       <h3>葛拉漢</h3>
-      <p data-testid="detail-graham">{GRAHAM_NOTE} {row.graham.qualified ? "門檻通過" : "門檻沒過"}（不給分）</p>
-      {row.graham.rows.map((item) => <p key={item.key} className="muted">{item.label}：{settings.grahamOn[item.key as keyof typeof settings.grahamOn] ? (item.pass ? "過" : item.status === "unverified" ? "未驗證" : "沒過") : "不看"}。{item.detail}</p>)}
+      <p data-testid="detail-graham">{GRAHAM_NOTE}</p>
+      <p className="muted">{GRAHAM_TRADEOFF}</p>
+      <p>{grahamText}</p>
+      <h3>巴菲特</h3>
+      <p data-testid="detail-buffett">{BUFFETT_NOTE}</p>
+      <p className="muted">{BUFFETT_TRADEOFF}</p>
+      <p data-testid="buffett-completeness">完整度 {buffett.completeness.toFixed(0)}%。分數 {buffett.score == null ? "未驗證" : buffett.score.toFixed(1)}。假設成長 {(settings.buffettGrowth * 100).toFixed(1)}%、折現 {(settings.buffettDiscount * 100).toFixed(1)}%。</p>
+      {buffett.items.map((item) => (
+        <p key={item.key} data-testid={`buffett-item-${item.key}`}>
+          {item.label}：{item.status === "verified" ? `${item.score?.toFixed(1)} 分，計入權重 ${item.scaled.toFixed(1)}` : "未驗證，這項排除"}。{item.detail}
+          {item.source ? ` 來源 ${item.source}（${item.date || "無日期"}）` : ""}
+        </p>
+      ))}
       <div className="row">
         <button type="button" className="btn" onClick={onFav}>{favorite ? "已收藏" : "收藏"}</button>
         <a className="btn" data-testid="detail-share-line" href={lineHref(text)}>用 Line 分享</a>
@@ -759,9 +916,18 @@ function Detail({ row, stock, settings, magicText, favorite, onClose, onFav, toa
           toast("已複製摘要");
         }}>系統分享</button>
         <button type="button" className="btn" onClick={() => copyText(text)}>複製</button>
-        <button type="button" className="btn" data-testid="detail-export-pdf" onClick={() => exportReport(stock.id, `${stock.id} ${stock.name}`, reportLines(row, stock, settings), "pdf")}>匯出 PDF</button>
-        <button type="button" className="btn" data-testid="detail-export-image" onClick={() => exportReport(stock.id, `${stock.id} ${stock.name}`, reportLines(row, stock, settings), "image")}>匯出圖片</button>
+        <button type="button" className="btn" data-testid="detail-export-pdf" onClick={() => exportReport(stock.id, `璟睿投資理財 ${stock.id} ${stock.name}`, [...reportLines(row, stock, settings), ...formulaLines], "pdf")}>匯出 PDF</button>
+        <button type="button" className="btn" data-testid="detail-export-image" onClick={() => exportReport(stock.id, `璟睿投資理財 ${stock.id} ${stock.name}`, [...reportLines(row, stock, settings), ...formulaLines], "image")}>匯出圖片</button>
       </div>
+      <section data-testid="formula-detail" className="formula">
+        <h2>公式與計算方式</h2>
+        {formulas.map((block) => (
+          <div key={block.id}>
+            <h3>{block.title}</h3>
+            {block.lines.map((line) => <p key={line}>{line}</p>)}
+          </div>
+        ))}
+      </section>
       <h3>市值參考</h3>
       <p>{fmt(stock.mcapBillion)} 億元，母體排名 {stock.mcapRank ?? "未驗證"}／{stock.mcapUniverse ?? "未驗證"}。指數：{stock.indexMember}。外陸資 {fmt(stock.foreignPct)}%（{stock.foreignDate}）。</p>
       <h3>燈號理由</h3>
@@ -779,45 +945,6 @@ function Detail({ row, stock, settings, magicText, favorite, onClose, onFav, toa
       )}
       <p className="muted">ChatGPT 對照只記種子裡的標記「{stock.externalAi}」，沒有對照原文，不計分、不另寫意見。</p>
       <Plain term="星等" />
-    </div>
-  );
-}
-
-function MasterSet({ title, gateId, enabled, onToggle, principle, tradeoff, rows, flags, onFlag, prefix, caps }: {
-  title: string;
-  gateId: string;
-  enabled: boolean;
-  onToggle: () => void;
-  principle: string;
-  tradeoff: string;
-  rows: { key: string; label: string; missed: number; unverified: number; failed: number }[];
-  flags: Record<string, boolean>;
-  onFlag: (key: string) => void;
-  prefix: string;
-  caps: { id: string; label: string; value: number; set: (value: number) => void }[];
-}) {
-  return (
-    <div>
-      <h3>{title}</h3>
-      <p data-testid={`${prefix}-note`}>{principle}</p>
-      <p data-testid={`${prefix}-tradeoff`}>{tradeoff}</p>
-      <label><input data-testid={gateId} type="checkbox" checked={enabled} onChange={onToggle} /> 用這組當門檻（預設關）</label>
-      {rows.map((row) => (
-        <div key={row.key}>
-          <label>
-            <input data-testid={`${prefix}-on-${row.key}`} type="checkbox" checked={flags[row.key] !== false} onChange={() => onFlag(row.key)} /> {row.label}
-          </label>
-          <span data-testid={`${prefix}-fail-${row.key}`}> 沒過 {row.missed}（未驗證 {row.unverified}、查了但沒過 {row.failed}）</span>
-        </div>
-      ))}
-      {caps.map((cap) => (
-        <label key={cap.id} className="muted">{cap.label}
-          <input data-testid={cap.id} type="number" value={cap.value} onChange={(event) => {
-            const next = Number(event.target.value);
-            if (Number.isFinite(next)) cap.set(next);
-          }} />
-        </label>
-      ))}
     </div>
   );
 }

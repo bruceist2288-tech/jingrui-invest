@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { toInput } from "../lib/canslim";
+import { computeBuffett, computeGraham } from "../lib/masters";
 import {
   DEFAULT_SETTINGS,
   normalizeSettings,
@@ -51,11 +52,84 @@ assert.equal(opened.core.length, 3);
 assert.ok(opened.pool.length < 30);
 assert.ok(priorityBuys(opened.core).every((row: ScoredStock) => row.light === "green"));
 assert.deepEqual(overlapIds(["a", "b"], ["b", "c"]), ["b"]);
-const sample = scored[0];
-assert.equal(sample.graham.rows.find((row) => row.key === "pb")?.status, "unverified");
-assert.equal(sample.graham.rows.find((row) => row.key === "dividend")?.pass, false);
-const strictGraham = rankUniverse(inputs, normalizeSettings({ ...openGate, grahamGate: true, grahamPeMax: 0 }));
-assert.ok(strictGraham.pool.length < opened.pool.length);
+const tsmcStock = bundle.stocks.find((stock) => stock.id === "2330");
+assert.ok(tsmcStock);
+const graham = computeGraham({
+  price: tsmcStock.close,
+  pe: 24.75,
+  pb: 8.61,
+  priceDate: tsmcStock.priceDate,
+  priceSource: tsmcStock.priceSource,
+  valuationDate: "2026-11-06",
+  valuationSource: "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+});
+assert.equal(graham.state, "ranked");
+assert.ok((graham.grahamNumber || 0) > 0);
+assert.ok(graham.margin != null);
+const negativeBook = computeGraham({
+  price: 100,
+  pe: 10,
+  pb: -1,
+  priceDate: "2026-11-06",
+  priceSource: "test",
+  valuationDate: "2026-11-06",
+  valuationSource: "test",
+});
+assert.equal(negativeBook.state, "excluded");
+assert.match(negativeBook.reason, /不適用/);
+const missingValuation = computeGraham({
+  price: 100,
+  pe: null,
+  pb: 1,
+  priceDate: "2026-11-06",
+  priceSource: "test",
+  valuationDate: null,
+  valuationSource: null,
+});
+assert.equal(missingValuation.state, "excluded");
+assert.match(missingValuation.reason, /未驗證/);
+
+const facts = {
+  roe: tsmcStock.roe,
+  debt: tsmcStock.debt,
+  fcfQuarters: tsmcStock.fcfQuarters,
+  fcfTtm: tsmcStock.fcfTtm,
+  gmTrend: tsmcStock.gmTrend,
+  mcapBillion: tsmcStock.mcapBillion,
+  reportQuarter: tsmcStock.reportQuarter,
+  priceDate: tsmcStock.priceDate,
+  statementSource: tsmcStock.statementSource,
+  fcfSource: tsmcStock.fcfSource,
+};
+const assumptions = {
+  weights: settings.buffettWeights,
+  roeMin: settings.buffettRoeMin,
+  debtCap: settings.buffettDebtCap,
+  growth: settings.buffettGrowth,
+  discount: settings.buffettDiscount,
+};
+const buffett = computeBuffett(facts, assumptions);
+assert.equal(buffett.items.find((item) => item.key === "roe")?.status, "unverified");
+assert.match(buffett.items.find((item) => item.key === "roe")?.detail || "", /不能評/);
+assert.equal(buffett.items.find((item) => item.key === "debt")?.status, "verified");
+assert.equal(buffett.items.find((item) => item.key === "fcf")?.status, "verified");
+assert.equal(buffett.items.find((item) => item.key === "margin")?.status, "verified");
+assert.equal(buffett.items.find((item) => item.key === "dcf")?.status, "verified");
+assert.ok(buffett.score != null);
+assert.equal(Math.round(buffett.completeness), 80);
+const heavy = computeBuffett(facts, { ...assumptions, weights: { ...assumptions.weights, dcf: 80 } });
+assert.notEqual(Math.round((heavy.score || 0) * 10), Math.round((buffett.score || 0) * 10));
+const noDiscount = computeBuffett(facts, { ...assumptions, growth: 0.1, discount: 0.1 });
+assert.equal(noDiscount.items.find((item) => item.key === "dcf")?.status, "unverified");
+assert.ok(noDiscount.completeness < buffett.completeness);
+const onlyDebt = computeBuffett(facts, { ...assumptions, weights: { roe: 20, debt: 15, fcf: 0, margin: 0, dcf: 0 } });
+const debtScore = onlyDebt.items.find((item) => item.key === "debt")?.score || 0;
+assert.ok(onlyDebt.score != null);
+assert.ok(Math.abs(onlyDebt.score - debtScore) < 0.01);
+assert.equal(settings.rankingMethod, "system");
+const buffettRank = normalizeSettings({ ...openGate, rankingMethod: "buffett" });
+assert.equal(buffettRank.rankingMethod, "buffett");
+assert.equal(buffettRank.buffettWeights.dcf, 40);
 
 const ranked = rankMagic([
   { id: "A", industry: "半導體業", roc: 30, ey: 10, gatePass: true },

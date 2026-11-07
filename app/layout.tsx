@@ -2,10 +2,17 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "排雷選股",
-  description: "先排雷，再選股。總裁個人版，不自動下單。",
-  applicationName: "排雷選股",
-  appleWebApp: { capable: true, title: "排雷選股", statusBarStyle: "default" },
+  title: "璟睿投資理財",
+  description: "璟睿投資理財。先排雷，再選股。不自動下單。",
+  applicationName: "璟睿投資理財",
+  appleWebApp: { capable: true, title: "璟睿投資理財", statusBarStyle: "default" },
+  icons: {
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/icon-192.png", sizes: "192x192" }],
+  },
 };
 
 export const viewport: Viewport = {

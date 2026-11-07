@@ -2,9 +2,9 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "排雷選股",
-    short_name: "排雷選股",
-    description: "先排雷，再選股。總裁個人版。",
+    name: "璟睿投資理財",
+    short_name: "璟睿投資理財",
+    description: "璟睿投資理財。先排雷，再選股。",
     start_url: "/",
     display: "standalone",
     background_color: "#f3ecdf",

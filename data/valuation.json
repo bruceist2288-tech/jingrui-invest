@@ -1,0 +1,215 @@
+{
+  "asOf": "2026-11-07",
+  "rows": {
+    "1216": {
+      "pe": 18.2,
+      "pb": 3.02,
+      "date": "1151106",
+      "source": "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+      "market": "sii"
+    },
+    "1513": {
+      "pe": 15.58,
+      "pb": 3.29,
+      "date": "1151106",
+      "source": "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+      "market": "sii"
+    },
+    "2330": {
+      "pe": 24.75,
+      "pb": 8.61,
+      "date": "1151106",
+      "source": "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+      "market": "sii"
+    },
+    "2344": {
+      "pe": 7.76,
+      "pb": 2.62,
+      "date": "1151106",
+      "source": "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+      "market": "sii"
+    },
+    "2382": {
+      "pe": 12.66,
+      "pb": 4.6,
+      "date": "1151106",
+      "source": "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+      "market": "sii"
+    },
+    "2395": {
+      "pe": 27.95,
+      "pb": 7.66,
+      "date": "1151106",
+      "source": "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+      "market": "sii"
+    },
+    "2408": {
+      "pe": 6.77,
+      "pb": 2.89,
+      "date": "1151106",
+      "source": "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+      "market": "sii"
+    },
+    "2412": {
+      "pe": 32.12,
+      "pb": 3.46,
+      "date": "1151106",
+      "source": "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+      "market": "sii"
+    },
+    "2421": {
+      "pe": 12.49,
+      "pb": 3.13,
+      "date": "1151106",
+      "source": "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+      "market": "sii"
+    },
+    "2451": {
+      "pe": 3.53,
+      "pb": 2.34,
+      "date": "1151106",
+      "source": "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+      "market": "sii"
+    },
+    "2454": {
+      "pe": 55.99,
+      "pb": 12.76,
+      "date": "1151106",
+      "source": "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+      "market": "sii"
+    },
+    "3006": {
+      "pe": 2.92,
+      "pb": 1.94,
+      "date": "1151106",
+      "source": "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+      "market": "sii"
+    },
+    "3017": {
+      "pe": 30.79,
+      "pb": 16.43,
+      "date": "1151106",
+      "source": "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+      "market": "sii"
+    },
+    "3026": {
+      "pe": 36.8,
+      "pb": 7.13,
+      "date": "1151106",
+      "source": "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+      "market": "sii"
+    },
+    "3034": {
+      "pe": 15.26,
+      "pb": 4.03,
+      "date": "1151106",
+      "source": "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+      "market": "sii"
+    },
+    "3167": {
+      "pe": 49.09,
+      "pb": 14.59,
+      "date": "1151106",
+      "source": "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+      "market": "sii"
+    },
+    "3617": {
+      "pe": 9.72,
+      "pb": 1.89,
+      "date": "1151106",
+      "source": "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+      "market": "sii"
+    },
+    "3665": {
+      "pe": 24.33,
+      "pb": 5.22,
+      "date": "1151106",
+      "source": "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+      "market": "sii"
+    },
+    "3702": {
+      "pe": 7.72,
+      "pb": 1.62,
+      "date": "1151106",
+      "source": "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+      "market": "sii"
+    },
+    "5434": {
+      "pe": 14.54,
+      "pb": 3.73,
+      "date": "1151106",
+      "source": "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+      "market": "sii"
+    },
+    "6446": {
+      "pe": 62.19,
+      "pb": 12.89,
+      "date": "1151106",
+      "source": "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+      "market": "sii"
+    },
+    "6505": {
+      "pe": 11.25,
+      "pb": 1.48,
+      "date": "1151106",
+      "source": "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+      "market": "sii"
+    },
+    "6805": {
+      "pe": 30.81,
+      "pb": 11.97,
+      "date": "1151106",
+      "source": "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+      "market": "sii"
+    },
+    "8046": {
+      "pe": 70.06,
+      "pb": 10.7,
+      "date": "1151106",
+      "source": "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+      "market": "sii"
+    },
+    "3529": {
+      "pe": 59.2,
+      "pb": 34.11,
+      "date": "1151106",
+      "source": "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis",
+      "market": "otc"
+    },
+    "3689": {
+      "pe": 11.23,
+      "pb": 1.63,
+      "date": "1151106",
+      "source": "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis",
+      "market": "otc"
+    },
+    "5274": {
+      "pe": 75.88,
+      "pb": 55.19,
+      "date": "1151106",
+      "source": "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis",
+      "market": "otc"
+    },
+    "5289": {
+      "pe": 5.15,
+      "pb": 3.84,
+      "date": "1151106",
+      "source": "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis",
+      "market": "otc"
+    },
+    "6712": {
+      "pe": 31.08,
+      "pb": 5.17,
+      "date": "1151106",
+      "source": "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis",
+      "market": "otc"
+    },
+    "6739": {
+      "pe": 28.97,
+      "pb": 15.47,
+      "date": "1151106",
+      "source": "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis",
+      "market": "otc"
+    }
+  }
+}

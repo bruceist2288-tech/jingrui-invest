@@ -12,7 +12,6 @@ import {
   starLabel,
   weightLine,
 } from "./engine";
-import { rulePhrase } from "./masters";
 import type { BundleStock } from "./types";
 
 export { ORIGIN_NOTES };
@@ -350,10 +349,10 @@ export function exitChecks(stock: BundleStock, cost: number | null): CheckRow[] 
   ];
 }
 
-export function shareText(row: ScoredStock, stock: BundleStock, settings: Settings, magic = "神奇公式排名：未驗證（獨立名單，不進累加）"): string {
+export function shareText(row: ScoredStock, stock: BundleStock, settings: Settings, magic = "神奇公式排名：未驗證（獨立名單，不進累加）", graham = "葛拉漢：未驗證/不適用", buffett = "巴菲特：未驗證"): string {
   const reasons = topReasons(stock);
   const lines = [
-    `【排雷選股】${stock.id} ${stock.name}`,
+    `【璟睿投資理財】${stock.id} ${stock.name}`,
     weightLine(settings),
     canslimWeightLine(settings),
     magic,
@@ -367,7 +366,8 @@ export function shareText(row: ScoredStock, stock: BundleStock, settings: Settin
       return `${piece.label}：${round1(piece.score)}`;
     }),
     `本系統分數：${round1(row.system.score)}｜星等只看本系統：${starLabel(row.stars)}｜${lightLabel(row.light)}｜風險：${riskLabel(row.risk)}`,
-    rulePhrase("葛拉漢", row.graham, settings.grahamGate),
+    graham,
+    buffett,
     `系統結論：${row.combo}。${stock.reasonText}`,
     "前 3 個理由：",
     ...reasons.map((reason, index) => `${index + 1}. ${reason}`),
@@ -378,7 +378,7 @@ export function shareText(row: ScoredStock, stock: BundleStock, settings: Settin
 }
 
 export function listShareText(rows: ScoredStock[], stocks: Map<string, BundleStock>, settings: Settings): string {
-  const head = [`【排雷選股】名單摘要`, weightLine(settings), "分數不等於買賣建議。沒有自動下單。"];
+  const head = [`【璟睿投資理財】名單摘要`, weightLine(settings), "分數不等於買賣建議。沒有自動下單。"];
   const body = rows.slice(0, 10).map((row, index) => {
     const stock = stocks.get(row.stock.id)!;
     const bits = row.pieces
