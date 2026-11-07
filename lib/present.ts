@@ -367,7 +367,6 @@ export function shareText(row: ScoredStock, stock: BundleStock, settings: Settin
       return `${piece.label}：${round1(piece.score)}`;
     }),
     `本系統分數：${round1(row.system.score)}｜星等只看本系統：${starLabel(row.stars)}｜${lightLabel(row.light)}｜風險：${riskLabel(row.risk)}`,
-    rulePhrase("巴菲特", row.buffett, settings.buffettGate),
     rulePhrase("葛拉漢", row.graham, settings.grahamGate),
     `系統結論：${row.combo}。${stock.reasonText}`,
     "前 3 個理由：",

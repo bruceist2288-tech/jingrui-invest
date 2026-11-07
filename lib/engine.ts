@@ -1,4 +1,4 @@
-import { assessBuffett, assessGraham, rulePasses, type QualityFacts, type RuleResult } from "./masters";
+import { assessGraham, rulePasses, type QualityFacts, type RuleResult } from "./masters";
 
 export const CATEGORIES = [
   {
@@ -193,12 +193,8 @@ export interface Settings {
   standards: { system: boolean; magic: boolean; canslim: boolean };
   rankingMethod: "system" | "magic";
   canslimGate: boolean;
-  buffettGate: boolean;
   grahamGate: boolean;
-  buffettOn: { roe: boolean; debt: boolean; fcf: boolean; margin: boolean };
   grahamOn: { pe: boolean; pb: boolean; current: boolean; earnings: boolean; dividend: boolean };
-  buffettRoeMin: number;
-  buffettDebtMax: number;
   grahamPeMax: number;
   grahamPbMax: number;
   grahamProductMax: number;
@@ -248,12 +244,8 @@ export const DEFAULT_SETTINGS: Settings = {
   standards: { system: true, magic: false, canslim: true },
   rankingMethod: "system",
   canslimGate: true,
-  buffettGate: false,
   grahamGate: false,
-  buffettOn: { roe: true, debt: true, fcf: true, margin: true },
   grahamOn: { pe: true, pb: true, current: true, earnings: true, dividend: true },
-  buffettRoeMin: 15,
-  buffettDebtMax: 50,
   grahamPeMax: 15,
   grahamPbMax: 1.5,
   grahamProductMax: 22.5,
@@ -304,14 +296,7 @@ export function normalizeSettings(input: Settings): Settings {
     standards: { system: true, magic: false, canslim: true },
     rankingMethod: input.rankingMethod === "magic" ? "magic" : "system",
     canslimGate: input.canslimGate !== false,
-    buffettGate: input.buffettGate === true,
     grahamGate: input.grahamGate === true,
-    buffettOn: {
-      roe: input.buffettOn?.roe !== false,
-      debt: input.buffettOn?.debt !== false,
-      fcf: input.buffettOn?.fcf !== false,
-      margin: input.buffettOn?.margin !== false,
-    },
     grahamOn: {
       pe: input.grahamOn?.pe !== false,
       pb: input.grahamOn?.pb !== false,
@@ -319,8 +304,6 @@ export function normalizeSettings(input: Settings): Settings {
       earnings: input.grahamOn?.earnings !== false,
       dividend: input.grahamOn?.dividend !== false,
     },
-    buffettRoeMin: numberOr(input.buffettRoeMin, 15),
-    buffettDebtMax: numberOr(input.buffettDebtMax, 50),
     grahamPeMax: numberOr(input.grahamPeMax, 15),
     grahamPbMax: numberOr(input.grahamPbMax, 1.5),
     grahamProductMax: numberOr(input.grahamProductMax, 22.5),
@@ -658,7 +641,6 @@ export interface ScoredStock {
   risk: "pass" | "warn" | "veto";
   system: SystemScore;
   canslim: CanslimResult;
-  buffett: RuleResult;
   graham: RuleResult;
   pieces: StandardPiece[];
   sum: number | null;
@@ -696,7 +678,6 @@ export function scoreStock(stock: StockInput, settings: Settings): Omit<ScoredSt
   const safe = normalizeSettings(settings);
   const system = systemScore(stock, safe);
   const canslim = scoreCanslim(stock, safe);
-  const buffett = assessBuffett(stock.quality, { on: safe.buffettOn, roeMin: safe.buffettRoeMin, debtMax: safe.buffettDebtMax });
   const graham = assessGraham(stock.quality, {
     on: safe.grahamOn,
     peMax: safe.grahamPeMax,
@@ -716,7 +697,6 @@ export function scoreStock(stock: StockInput, settings: Settings): Omit<ScoredSt
     risk: riskStatus(stock, safe),
     system,
     canslim,
-    buffett,
     graham,
     pieces,
     sum,
@@ -788,9 +768,8 @@ export function listHeader(settings: Settings): string {
       ? "關卡 1 2 3 4 5 6 全開"
       : `關卡 ${open.join(" ") || "無"}${closed.length ? `｜已關閉：${closed.join("、")}` : ""}`;
   const canslim = safe.canslimGate ? tickedCanslimLabel(safe) : "CAN SLIM門檻關";
-  const buffett = safe.buffettGate ? "巴菲特門檻開" : "巴菲特門檻關";
   const graham = safe.grahamGate ? "葛拉漢門檻開" : "葛拉漢門檻關";
-  return `${gateText}｜${method}｜${canslim}｜${buffett}｜${graham}`;
+  return `${gateText}｜${method}｜${canslim}｜${graham}`;
 }
 
 export function weightLine(settings: Settings): string {
@@ -838,7 +817,6 @@ export function rankUniverse(stocks: StockInput[], settings: Settings): RankedBo
     }
     const failed = failReasons(stock, safe);
     if (!canslimPasses(base.canslim, safe)) failed.push("CAN SLIM 勾選條件未全過");
-    if (!rulePasses(base.buffett, safe.buffettGate)) failed.push("巴菲特勾選條件未全過");
     if (!rulePasses(base.graham, safe.grahamGate)) failed.push("葛拉漢勾選條件未全過");
     if (failed.length) {
       fail.push({ ...base, tier: "fail", reasons: failed });

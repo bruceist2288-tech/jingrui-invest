@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import rawBundle from "@/data/bundle.json";
 import { toInput } from "@/lib/canslim";
-import { BUFFETT_NOTE, BUFFETT_TRADEOFF, GRAHAM_NOTE, GRAHAM_TRADEOFF, summarizeRules } from "@/lib/masters";
+import { GRAHAM_NOTE, GRAHAM_TRADEOFF, summarizeRules } from "@/lib/masters";
 import {
   CANSLIM_LABEL,
   CANSLIM_NORM_NOTE,
@@ -268,7 +268,6 @@ function Card({ row, settings, open }: { row: ScoredStock & { bothLists?: boolea
         {" "}CAN SLIM 門檻 <b data-testid="canslim-score">{row.canslim.qualified ? "通過" : "沒過"}</b>
         {row.bothLists && <b data-testid="both-badge"> 兩種預備名單都有</b>}</p>
       <p><Missing row={row} /></p>
-      {settings.buffettGate && !row.buffett.qualified && <p data-testid="buffett-miss">巴菲特缺：{row.buffett.missing.map((item) => `${item.label}${item.status === "unverified" ? "（未驗證）" : ""}`).join("、")}</p>}
       {settings.grahamGate && !row.graham.qualified && <p data-testid="graham-miss">葛拉漢缺：{row.graham.missing.map((item) => `${item.label}${item.status === "unverified" ? "（未驗證）" : ""}`).join("、")}</p>}
       {settings.display !== "novice" && (
         <div data-testid="card-reasons">
@@ -662,22 +661,6 @@ function Me(props: {
         </button>
         <p className="muted">CAN SLIM 不計分。勾選條件全過才進預備名單。目前全過 {props.all.filter((row) => row.canslim.qualified).length} 家。</p>
         <MasterSet
-          title="巴菲特門檻"
-          gateId="buffett-gate"
-          enabled={settings.buffettGate}
-          onToggle={() => commit({ ...settings, buffettGate: !settings.buffettGate }, "巴菲特門檻")}
-          principle={BUFFETT_NOTE}
-          tradeoff={BUFFETT_TRADEOFF}
-          rows={summarizeRules(props.all.map((row) => row.buffett))}
-          flags={settings.buffettOn}
-          onFlag={(key) => commit({ ...settings, buffettOn: { ...settings.buffettOn, [key]: !settings.buffettOn[key as keyof typeof settings.buffettOn] } }, `巴菲特 ${key}`)}
-          prefix="buffett"
-          caps={[
-            { id: "buffett-roe-min", label: "ROE 下限 %", value: settings.buffettRoeMin, set: (value) => commit({ ...settings, buffettRoeMin: value }, "巴菲特 ROE") },
-            { id: "buffett-debt-max", label: "負債比上限 %", value: settings.buffettDebtMax, set: (value) => commit({ ...settings, buffettDebtMax: value }, "巴菲特負債") },
-          ]}
-        />
-        <MasterSet
           title="葛拉漢門檻"
           gateId="graham-gate"
           enabled={settings.grahamGate}
@@ -762,9 +745,6 @@ function Detail({ row, stock, settings, magicText, favorite, onClose, onFav, toa
       <p data-testid="detail-canslim-weights">{tickedCanslimLabel(settings)}</p>
       <p className="muted">{CANSLIM_NORM_NOTE}</p>
       {row.canslim.rows.map((item) => <p key={item.key} className={gapIsCore(item.key) && !item.pass && settings.canslimOn[item.key] ? "missing-core" : "muted"}>{item.key} {item.label}：{settings.canslimOn[item.key] ? (item.pass ? "過" : item.status === "unverified" ? "未驗證" : "沒過") : "不看"}。{item.detail}</p>)}
-      <h3>巴菲特</h3>
-      <p data-testid="detail-buffett">{BUFFETT_NOTE} {row.buffett.qualified ? "門檻通過" : "門檻沒過"}（不給分）</p>
-      {row.buffett.rows.map((item) => <p key={item.key} className="muted">{item.label}：{settings.buffettOn[item.key as keyof typeof settings.buffettOn] ? (item.pass ? "過" : item.status === "unverified" ? "未驗證" : "沒過") : "不看"}。{item.detail}</p>)}
       <h3>葛拉漢</h3>
       <p data-testid="detail-graham">{GRAHAM_NOTE} {row.graham.qualified ? "門檻通過" : "門檻沒過"}（不給分）</p>
       {row.graham.rows.map((item) => <p key={item.key} className="muted">{item.label}：{settings.grahamOn[item.key as keyof typeof settings.grahamOn] ? (item.pass ? "過" : item.status === "unverified" ? "未驗證" : "沒過") : "不看"}。{item.detail}</p>)}

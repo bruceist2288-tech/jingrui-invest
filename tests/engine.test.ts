@@ -54,9 +54,8 @@ assert.deepEqual(overlapIds(["a", "b"], ["b", "c"]), ["b"]);
 const sample = scored[0];
 assert.equal(sample.graham.rows.find((row) => row.key === "pb")?.status, "unverified");
 assert.equal(sample.graham.rows.find((row) => row.key === "dividend")?.pass, false);
-assert.equal(sample.buffett.rows.find((row) => row.key === "roe")?.detail.includes("沒有連續五年"), true);
-const strictBuffett = rankUniverse(inputs, normalizeSettings({ ...openGate, buffettGate: true, buffettDebtMax: 0 }));
-assert.ok(strictBuffett.pool.length < opened.pool.length);
+const strictGraham = rankUniverse(inputs, normalizeSettings({ ...openGate, grahamGate: true, grahamPeMax: 0 }));
+assert.ok(strictGraham.pool.length < opened.pool.length);
 
 const ranked = rankMagic([
   { id: "A", industry: "半導體業", roc: 30, ey: 10, gatePass: true },

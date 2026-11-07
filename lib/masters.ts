@@ -29,20 +29,10 @@ export interface RuleResult {
   rows: RuleRow[];
 }
 
-export const BUFFETT_NOTE =
-  "用合理價格買護城河深的好公司，長期持有，重品質。";
-export const BUFFETT_TRADEOFF =
-  "好處是少碰體質差的公司。限制是護城河沒有官方數字；下面是我們把公開原則量化的近似，不是巴菲特的原話清單。";
 export const GRAHAM_NOTE =
   "巴菲特的老師。用遠低於價值的價格買、留安全邊際，重便宜。";
 export const GRAHAM_TRADEOFF =
   "好處是買得不夠便宜就不進場。限制是很多便宜指標這份種子沒有；沒有就標未驗證、不算過。這同樣是我們的量化近似，不是《智慧型股票投資人》的逐條原文。";
-
-export interface BuffettCaps {
-  on: { roe: boolean; debt: boolean; fcf: boolean; margin: boolean };
-  roeMin: number;
-  debtMax: number;
-}
 
 export interface GrahamCaps {
   on: { pe: boolean; pb: boolean; current: boolean; earnings: boolean; dividend: boolean };
@@ -52,86 +42,10 @@ export interface GrahamCaps {
   currentMin: number;
 }
 
-export const DEFAULT_BUFFETT_ON: BuffettCaps["on"] = { roe: true, debt: true, fcf: true, margin: true };
 export const DEFAULT_GRAHAM_ON: GrahamCaps["on"] = { pe: true, pb: true, current: true, earnings: true, dividend: true };
 
 function unverified(key: string, label: string, detail: string): RuleRow {
   return { key, label, status: "unverified", pass: false, detail, source: null, date: null };
-}
-
-function parseSeries(text: string): { period: string; value: number }[] {
-  return (text || "")
-    .split("/")
-    .map((part) => part.trim())
-    .map((part) => {
-      const [period, raw] = part.split(":");
-      const value = Number(String(raw || "").replace("%", "").trim());
-      return { period: (period || "").trim(), value };
-    })
-    .filter((item) => item.period && Number.isFinite(item.value));
-}
-
-export function assessBuffett(stock: QualityFacts, caps: BuffettCaps): RuleResult {
-  const rows: RuleRow[] = [];
-  if (stock.roe == null) {
-    rows.push(unverified("roe", "ROE", "沒有已驗證的 ROE，連一年都沒有，未驗證。"));
-  } else {
-    const pass = stock.roe >= caps.roeMin;
-    rows.push({
-      key: "roe",
-      label: "ROE",
-      status: "verified",
-      pass,
-      detail: `只驗到 1 個 ROE ${stock.roe}%（${stock.reportQuarter}），沒有連續五年。已驗到的要 ≥ ${caps.roeMin}%。`,
-      source: stock.statementSource,
-      date: stock.reportQuarter,
-    });
-  }
-  if (stock.debt == null) {
-    rows.push(unverified("debt", "負債比", "沒有負債比，未驗證。"));
-  } else {
-    rows.push({
-      key: "debt",
-      label: "負債比",
-      status: "verified",
-      pass: stock.debt < caps.debtMax,
-      detail: `負債比 ${stock.debt}%（${stock.reportQuarter}）。要低於 ${caps.debtMax}%。`,
-      source: stock.statementSource,
-      date: stock.reportQuarter,
-    });
-  }
-  const fcf = stock.fcfQuarters.filter((item) => item.v != null);
-  if (fcf.length < 2) {
-    rows.push(unverified("fcf", "自由現金流", "沒有足夠的近期自由現金流，也沒有年度序列，未驗證。"));
-  } else {
-    const positive = fcf.filter((item) => (item.v as number) > 0).length;
-    rows.push({
-      key: "fcf",
-      label: "自由現金流",
-      status: "verified",
-      pass: positive / fcf.length > 0.5,
-      detail: `近 ${fcf.length} 季裡 ${positive} 季為正。沒有年度自由現金流，這是用已驗證季度代替「近年」的近似，過半才算過。`,
-      source: stock.fcfSource,
-      date: fcf[fcf.length - 1]?.q || stock.reportQuarter,
-    });
-  }
-  const margins = parseSeries(stock.gmTrend);
-  if (margins.length < 2) {
-    rows.push(unverified("margin", "毛利率", "毛利率序列不足，未驗證。"));
-  } else {
-    const first = margins[0];
-    const last = margins[margins.length - 1];
-    rows.push({
-      key: "margin",
-      label: "毛利率",
-      status: "verified",
-      pass: last.value >= first.value,
-      detail: `${first.period} ${first.value}% → ${last.period} ${last.value}%。持平或上升才算過。這是四季，不是五年。`,
-      source: stock.statementSource,
-      date: last.period,
-    });
-  }
-  return pack(rows, caps.on);
 }
 
 export function assessGraham(stock: QualityFacts, caps: GrahamCaps): RuleResult {

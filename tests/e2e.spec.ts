@@ -123,25 +123,20 @@ test("關卡立即重算、權重、持股與 PWA", async ({ page }) => {
   await page.evaluate(async () => navigator.serviceWorker.ready);
 });
 
-test("巴菲特與葛拉漢門檻", async ({ page }) => {
+test("葛拉漢門檻", async ({ page }) => {
   await page.getByTestId("tab-me").click();
-  await expect(page.getByTestId("buffett-gate")).not.toBeChecked();
   await expect(page.getByTestId("graham-gate")).not.toBeChecked();
-  await expect(page.getByTestId("buffett-note")).toContainText("長期持有");
-  await expect(page.getByTestId("buffett-tradeoff")).toContainText("近似");
   await expect(page.getByTestId("graham-note")).toContainText("安全邊際");
   await expect(page.getByTestId("graham-tradeoff")).toContainText("近似");
-  await expect(page.getByTestId("buffett-fail-debt")).toContainText("沒過");
   await expect(page.getByTestId("graham-fail-pb")).toContainText("未驗證 30");
   await expect(page.getByTestId("graham-pe-max")).toHaveValue("15");
-  await page.getByTestId("buffett-gate").check();
-  await expect(page.getByTestId("list-header")).toContainText("巴菲特門檻開");
+  await page.getByTestId("graham-gate").check();
+  await expect(page.getByTestId("list-header")).toContainText("葛拉漢門檻開");
   await page.getByTestId("search").fill("2330");
-  await expect(page.getByTestId("detail-buffett")).toContainText("不給分");
   await expect(page.getByTestId("detail-graham")).toContainText("安全邊際");
   const href = await page.getByTestId("detail-share-line").getAttribute("href");
   const text = decodeURIComponent(href || "");
-  expect(text).toContain("巴菲特門檻");
+  expect(text).not.toContain("巴菲特門檻");
   expect(text).toContain("葛拉漢門檻");
   await page.screenshot({ path: `${shots}/masters.png`, fullPage: true });
 });
